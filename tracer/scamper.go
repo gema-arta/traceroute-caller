@@ -74,6 +74,7 @@ func (*Scamper) DontTrace(conn connection.Connection, err error) {
 // every node. This uses more resources per-traceroute, but segfaults in the
 // called binaries have a much smaller "blast radius".
 func (s *Scamper) Trace(conn connection.Connection, t time.Time) (out string, err error) {
+	log.Println("remoteIP: " + conn.RemoteIP)
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Recovered (%v) a crashed trace for %v at %v\n", r, conn, t)
@@ -96,6 +97,8 @@ func (s *Scamper) trace(conn connection.Connection, t time.Time) (string, error)
 
 	_, err = buff.WriteString(GetMetaline(conn, false, ""))
 	rtx.PanicOnError(err, "Could not write to buffer")
+
+	log.Println("remoteIP: " + conn.RemoteIP)
 
 	cmd := pipe.Line(
 		pipe.Exec(s.Binary, "-I", "tracelb -P icmp-echo -q 3 -O ptr "+conn.RemoteIP, "-o-", "-O", "json"),
@@ -172,6 +175,7 @@ func (d *ScamperDaemon) MustStart(ctx context.Context) {
 // PanicOnError instead of Must because each trace is independent of the others,
 // so we should prevent a single failed trace from crashing everything.
 func (d *ScamperDaemon) Trace(conn connection.Connection, t time.Time) (out string, err error) {
+	log.Println("remoteIP: " + conn.RemoteIP)
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("Recovered (%v) a crashed trace for %v at %v\n", r, conn, t)
@@ -193,6 +197,7 @@ func (d *ScamperDaemon) TraceAll(connections []connection.Connection) {
 }
 
 func (d *ScamperDaemon) trace(conn connection.Connection, t time.Time) (string, error) {
+	log.Println("remoteIP: " + conn.RemoteIP)
 	dir, err := createTimePath(d.OutputPath, t)
 	rtx.PanicOnError(err, "Could not create directory")
 	filename := dir + d.generateFilename(conn.Cookie, t)
