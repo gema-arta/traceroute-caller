@@ -5,6 +5,7 @@ package parser
 
 import (
 	"errors"
+	"flag"
 	"log"
 	"net"
 	"os"
@@ -16,6 +17,13 @@ import (
 	"github.com/m-lab/etl/etl"
 	"github.com/m-lab/etl/metrics"
 	"github.com/m-lab/etl/schema"
+)
+
+var (
+	// Filename is a command-line flag holding the name of the unix-domain
+	// socket that should be used by the client and server. It is put here in an
+	// attempt to have just one standard flag name.
+	Filename = flag.String("annotation.socket", "", "The filename of the unix-domain socket on which events are served.")
 )
 
 func init() {
@@ -511,8 +519,45 @@ func (pt *PTParser) ParseAndWrite(fileName string, testName string, rawContent [
 	return nil
 }
 
-func (pt *PTParser) WriteOneTest(oneTest cachedPTData) {
+func CollectIP(oneTest cachedPTData) ([]net.IP, error) {
+	ipList := make(map[string]struct{})
+	ipSlice := make([]net.IP, 0, len(oneTest.Hops)+2)
+
+	ipList[oneTest.Source.IP] = struct{}{}
+	ipList[oneTest.Destination.IP] = struct{}{}
+
+	for _, hop := range oneTest.Hops {
+		ipList[hop.Source.IP] = struct{}{}
+		for _, link := range hop.Links {
+			ipList[link.HopDstIP] = struct{}{}
+		}
+	}
+
+	for ip := range ipList {
+		netIP := net.ParseIP(ip)
+		if netIP != nil {
+			ipSlice = append(ipSlice, netIP)
+		}
+	}
+
+	if len(ipSlice) == 0 {
+		return ipSlice, errors.New("No IP address")
+	}
+	return ipSlice, nil
+}
+
+func (pt *PTParser) WriteOneTest(oneTest cachedPTData) error {
 	// TODO: Annotate the IPs and write the file to Disk
+	requestIP, err := CollectIP(oneTest)
+	if err != nil {
+		return err
+	}
+
+	for ip := range requestIP {
+		// send request to UUID annotation service
+
+	}
+
 	/*
 		parseInfo := schema.ParseInfo{
 			TaskFileName:  pt.taskFileName,
@@ -534,6 +579,7 @@ func (pt *PTParser) WriteOneTest(oneTest cachedPTData) {
 		err := pt.AddRow(&ptTest)
 	*/
 	pt.NumFiles++
+	return nil
 }
 
 func (pt *PTParser) NumBufferedTests() int {

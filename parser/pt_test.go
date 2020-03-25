@@ -1,15 +1,24 @@
 package parser_test
 
 import (
+	"context"
 	"io/ioutil"
 	"log"
+	"net"
+	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/m-lab/etl/schema"
 	"github.com/m-lab/go/osx"
+	"github.com/m-lab/go/rtx"
 	"github.com/m-lab/traceroute-caller/parser"
+	"github.com/m-lab/uuid-annotator/asnannotator"
+	"github.com/m-lab/uuid-annotator/geoannotator"
+	"github.com/m-lab/uuid-annotator/ipservice"
+	"github.com/m-lab/uuid-annotator/rawfile"
 )
 
 func TestInitParserVersion(t *testing.T) {
@@ -370,4 +379,59 @@ func TestMiddleMessup(t *testing.T) {
 	if parseErr != nil {
 		t.Fatal("middle mess up should be just log warning, not create error")
 	}
+}
+
+var (
+	asn asnannotator.ASNAnnotator
+	geo geoannotator.GeoAnnotator
+)
+
+func AnnotationInit() {
+	ctx := context.Background()
+
+	// Set up ASN annotator.
+	u4, err := url.Parse("file:testdata/annotation/RouteViewIPv4.pfx2as.gz")
+	rtx.Must(err, "Could not parse URL")
+	local4Rawfile, err := rawfile.FromURL(context.Background(), u4)
+	rtx.Must(err, "Could not create rawfile.Provider")
+	u6, err := url.Parse("file:testdata/annotation/RouteViewIPv6.pfx2as.gz")
+	rtx.Must(err, "Could not parse URL")
+	local6Rawfile, err := rawfile.FromURL(context.Background(), u6)
+	rtx.Must(err, "Could not create rawfile.Provider")
+	localIPs := []net.IP{
+		net.ParseIP("9.0.0.9"),
+		net.ParseIP("2002::1"),
+	}
+	asn = asnannotator.New(ctx, local4Rawfile, local6Rawfile, localIPs)
+
+	// Set up geo annotator.
+	u, err := url.Parse("file:testdata/annotation/fake.tar.gz")
+	rtx.Must(err, "Could not parse URL")
+	localRawfile, err := rawfile.FromURL(context.Background(), u)
+	rtx.Must(err, "Could not create rawfile.Provider")
+	geo = geoannotator.New(ctx, localRawfile, localIPs)
+}
+
+func TestNewClient(t *testing.T) {
+	AnnotationInit()
+
+	d, err := ioutil.TempDir("", "TestNewClient")
+	rtx.Must(err, "Could not create tempdir")
+	defer os.RemoveAll(d)
+
+	sock := d + "/annotator.sock"
+
+	srv, err := ipservice.NewServer(sock, asn, geo)
+	rtx.Must(err, "Could not create server")
+	go srv.Serve()
+	defer srv.Close()
+
+	c := ipservice.NewClient(sock)
+	ctx := context.Background()
+	ann, err := c.Annotate(ctx, net.ParseIP("111.2.3.4"))
+	log.Printf("%+v", ann.Geo)
+	log.Printf("%+v", ann.Network)
+	rtx.Must(err, "Could not annotate localhost")
+
+	t.Fatal("middle")
 }
