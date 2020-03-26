@@ -523,9 +523,9 @@ func (pt *PTParser) ParseAndWrite(fileName string, testName string, rawContent [
 	return nil
 }
 
-func CollectIP(oneTest cachedPTData) ([]net.IP, error) {
+func CollectIP(oneTest cachedPTData) ([]string, error) {
 	ipList := make(map[string]struct{})
-	ipSlice := make([]net.IP, 0, len(oneTest.Hops)+2)
+	ipSlice := make([]string, 0, len(oneTest.Hops)+2)
 
 	ipList[oneTest.Source.IP] = struct{}{}
 	ipList[oneTest.Destination.IP] = struct{}{}
@@ -538,10 +538,7 @@ func CollectIP(oneTest cachedPTData) ([]net.IP, error) {
 	}
 
 	for ip := range ipList {
-		netIP := net.ParseIP(ip)
-		if netIP != nil {
-			ipSlice = append(ipSlice, netIP)
-		}
+		ipSlice = append(ipSlice, ip)
 	}
 
 	if len(ipSlice) == 0 {
@@ -558,33 +555,36 @@ func (pt *PTParser) WriteOneTest(oneTest cachedPTData) error {
 		return err
 	}
 	ctx := context.Background()
-	for _, ip := range requestIP {
-		_, err := UUIDClient.Annotate(ctx, ip)
-		if err != nil {
-			log.Println("Fail to get uuid annotation", err)
-		}
 
+	_, err = UUIDClient.Annotate(ctx, requestIP)
+	if err != nil {
+		log.Println("Fail to get uuid annotation", err)
 	}
 	/*
+		for ip, geo := range anno {
 
-		parseInfo := schema.ParseInfo{
-			TaskFileName:  pt.taskFileName,
-			ParseTime:     time.Now(),
-			ParserVersion: Version(),
-			Filename:      oneTest.TestID,
-		}
-
-		ptTest := schema.PTTest{
-			UUID:        oneTest.UUID,
-			TestTime:    oneTest.LogTime,
-			Parseinfo:   parseInfo,
-			Source:      oneTest.Source,
-			Destination: oneTest.Destination,
-			Hop:         oneTest.Hops,
 		}
 
 
-		err := pt.AddRow(&ptTest)
+
+			parseInfo := schema.ParseInfo{
+				TaskFileName:  pt.taskFileName,
+				ParseTime:     time.Now(),
+				ParserVersion: Version(),
+				Filename:      oneTest.TestID,
+			}
+
+			ptTest := schema.PTTest{
+				UUID:        oneTest.UUID,
+				TestTime:    oneTest.LogTime,
+				Parseinfo:   parseInfo,
+				Source:      oneTest.Source,
+				Destination: oneTest.Destination,
+				Hop:         oneTest.Hops,
+			}
+
+
+			err := pt.AddRow(&ptTest)
 	*/
 	pt.NumFiles++
 	return nil
