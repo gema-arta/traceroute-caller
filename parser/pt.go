@@ -4,6 +4,7 @@ package parser
 // The format of legacy test file can be found at https://paris-traceroute.net/.
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"log"
@@ -17,17 +18,20 @@ import (
 	"github.com/m-lab/etl/etl"
 	"github.com/m-lab/etl/metrics"
 	"github.com/m-lab/etl/schema"
+	"github.com/m-lab/uuid-annotator/ipservice"
 )
 
 var (
 	// Filename is a command-line flag holding the name of the unix-domain
 	// socket that should be used by the client and server. It is put here in an
 	// attempt to have just one standard flag name.
-	Filename = flag.String("annotation.socket", "", "The filename of the unix-domain socket on which events are served.")
+	UUIDSocketName = flag.String("annotation.socket", "", "The filename of the unix-domain socket on which events are served.")
+	UUIDClient     ipservice.Client
 )
 
 func init() {
 	InitParserVersion()
+	UUIDClient = ipservice.NewClient(*UUIDSocketName)
 }
 
 var gParserVersion string
@@ -549,16 +553,20 @@ func CollectIP(oneTest cachedPTData) ([]net.IP, error) {
 func (pt *PTParser) WriteOneTest(oneTest cachedPTData) error {
 	// TODO: Annotate the IPs and write the file to Disk
 	requestIP, err := CollectIP(oneTest)
+
 	if err != nil {
 		return err
 	}
-
-	for ip := range requestIP {
-		// send request to UUID annotation service
+	ctx := context.Background()
+	for _, ip := range requestIP {
+		_, err := UUIDClient.Annotate(ctx, ip)
+		if err != nil {
+			log.Println("Fail to get uuid annotation", err)
+		}
 
 	}
-
 	/*
+
 		parseInfo := schema.ParseInfo{
 			TaskFileName:  pt.taskFileName,
 			ParseTime:     time.Now(),
