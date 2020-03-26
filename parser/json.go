@@ -6,7 +6,6 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/google/go-jsonnet"
 	"github.com/m-lab/etl/metrics"
@@ -205,17 +204,9 @@ func ParseJSON(testName string, rawContent []byte, tableName string, taskFilenam
 		return schema.PTTest{}, errors.New("Invalid cycle-stop")
 	}
 
-	parseInfo := schema.ParseInfo{
-		TaskFileName:  taskFilename,
-		ParseTime:     time.Now(),
-		ParserVersion: Version(),
-		Filename:      testName,
-	}
-
 	return schema.PTTest{
 		UUID:           uuid,
 		TestTime:       logTime,
-		Parseinfo:      parseInfo,
 		StartTime:      int64(cycleStart.Start_time),
 		StopTime:       int64(cycleStop.Stop_time),
 		ScamperVersion: tracelb.Version,
