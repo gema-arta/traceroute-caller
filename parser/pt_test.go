@@ -415,24 +415,25 @@ func AnnotationInit() {
 func TestNewClient(t *testing.T) {
 	AnnotationInit()
 
+	d, err := ioutil.TempDir("", "TestNewClient")
+	rtx.Must(err, "Could not create tempdir")
+	defer os.RemoveAll(d)
+	sock := d + "/annotator.sock"
+
 	srv, err := ipservice.NewServer(sock, asn, geo)
 	rtx.Must(err, "Could not create server")
 	go srv.Serve()
 	defer srv.Close()
 
-	d, err := ioutil.TempDir("", "TestNewClient")
-	rtx.Must(err, "Could not create tempdir")
-	defer os.RemoveAll(d)
-	sock := d + "/annotator.sock"
 	c := ipservice.NewClient(sock)
 	ctx := context.Background()
 
-	requestIPs := [2]string{"111.2.3.4", "1.2.3.4"}
+	requestIPs := []string{"111.2.3.4", "1.2.3.4"}
 
 	ann, err := c.Annotate(ctx, requestIPs)
 	log.Printf("%+v", ann["111.2.3.4"].Geo)
 	log.Printf("%+v", ann["1.2.3.4"].Network)
 	rtx.Must(err, "Could not annotate localhost")
 
-	t.Fatal("middle")
+	//t.Fatal("middle")
 }
