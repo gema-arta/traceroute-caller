@@ -556,9 +556,13 @@ func (pt *PTParser) WriteOneTest(oneTest cachedPTData) error {
 	}
 	ctx := context.Background()
 
-	_, err = UUIDClient.Annotate(ctx, requestIP)
+	ann, err := UUIDClient.Annotate(ctx, requestIP)
 	if err != nil {
 		log.Println("Fail to get uuid annotation", err)
+	}
+
+	for ip := range ann {
+		log.Println(ip)
 	}
 	/*
 		for ip, geo := range anno {
