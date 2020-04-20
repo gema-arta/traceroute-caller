@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/google/go-jsonnet"
-	"github.com/m-lab/etl/metrics"
 	"github.com/m-lab/etl/schema"
 )
 
@@ -104,11 +103,31 @@ type CyclestopLine struct {
 	Stop_time float64 `json:"stop_time"`
 }
 
-// ParseJSON the raw jsonl test file into schema.PTTest.
-func ParseJSON(testName string, rawContent []byte, tableName string, taskFilename string) (schema.PTTest, error) {
-	metrics.WorkerState.WithLabelValues(tableName, "pt-json-parse").Inc()
-	defer metrics.WorkerState.WithLabelValues(tableName, "pt-json-parse").Dec()
+func ExtractIP(rawContent []byte) []string {
+	var IPList []string
+	var tracelb TracelbLine
 
+	jsonStrings := strings.Split(string(rawContent[:]), "\n")
+
+	// Parse the line in struct
+	err := json.Unmarshal([]byte(jsonStrings[2]), &tracelb)
+	if err != nil {
+		return IPList
+	}
+
+	log.Println(tracelb.Src)
+	IPList = append(IPList, tracelb.Src)
+	IPList = append(IPList, tracelb.Dst)
+
+	for i, _ := range tracelb.Nodes {
+		oneNode := &tracelb.Nodes[i]
+		IPList = append(IPList, oneNode.Addr)
+	}
+	return IPList
+}
+
+// ParseJSON the raw jsonl test file into schema.PTTest.
+func ParseJSON(testName string, rawContent []byte, taskFilename string) (schema.PTTest, error) {
 	// Get the logtime
 	logTime, err := GetLogtime(PTFileName{Name: filepath.Base(testName)})
 	if err != nil {
