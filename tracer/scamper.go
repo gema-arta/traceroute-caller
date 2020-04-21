@@ -238,6 +238,22 @@ func (d *ScamperDaemon) trace(conn connection.Connection, t time.Time) (string, 
 		return "", err
 	}
 
+	// Parse the buffer to get the IP list
+	iplist := parser.ExtractIP(buff.Bytes())
+	log.Println("extract IPs: ")
+	log.Println(iplist)
+	// Fetch annoatation for the IPs
+	client := ipservice.NewClient(*ipservice.SocketFilename)
+	ann, err := client.Annotate(context.Background(), iplist)
+	log.Println(*ipservice.SocketFilename)
+	log.Println(err)
+	if err == nil {
+		// add annotation to the final output
+		AnnotatedBuff := InsertAnnotation(ann, buff.Bytes())
+		rtx.PanicOnError(ioutil.WriteFile(filename, AnnotatedBuff, 0666), "Could not save output to file")
+		return string(AnnotatedBuff), nil
+	}
+
 	rtx.PanicOnError(err, "Command %v failed", cmd)
 	rtx.PanicOnError(ioutil.WriteFile(filename, buff.Bytes(), 0666), "Could not save output to file")
 	return string(buff.Bytes()), nil
