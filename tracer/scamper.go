@@ -237,7 +237,7 @@ func (d *ScamperDaemon) trace(conn connection.Connection, t time.Time) (string, 
 		log.Println("TimeOut for Trace: ", cmd)
 		return "", err
 	}
-
+	log.Println("test done!!!!!!!!!!!!!")
 	// Parse the buffer to get the IP list
 	iplist := parser.ExtractIP(buff.Bytes())
 	log.Println("extract IPs: ")
