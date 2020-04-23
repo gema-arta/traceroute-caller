@@ -247,6 +247,7 @@ func (d *ScamperDaemon) trace(conn connection.Connection, t time.Time) (string, 
 	ann, err := client.Annotate(context.Background(), iplist)
 	log.Println(*ipservice.SocketFilename)
 	log.Println(err)
+	log.Println(ann)
 	if err == nil {
 		// add annotation to the final output
 		AnnotatedBuff := InsertAnnotation(ann, buff.Bytes())
