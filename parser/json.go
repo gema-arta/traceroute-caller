@@ -8,7 +8,9 @@ import (
 	"strings"
 
 	"github.com/google/go-jsonnet"
+	"github.com/m-lab/annotation-serivce/api"
 	"github.com/m-lab/etl/schema"
+	"github.com/m-lab/uuid-annotator/annotator"
 )
 
 // Parse Scamper JSON filename like
@@ -101,6 +103,152 @@ type CyclestopLine struct {
 	ID        float64 `json:"id"`
 	Hostname  string  `json:"hostname"`
 	Stop_time float64 `json:"stop_time"`
+}
+
+func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
+	data []byte) ([]byte, error) {
+	var uuid, version string
+	var resultFromCache bool
+	var hops []schema.ScamperHop
+	var meta Metadata
+	var cycleStart CyclestartLine
+	var tracelb TracelbLine
+	var cycleStop CyclestopLine
+
+	jsonStrings := strings.Split(string(data[:]), "\n")
+	emptyByte := make([]byte, 0)
+	if len(jsonStrings) != 5 {
+		log.Println("Invalid test")
+		return emptyByte, errors.New("Invalid test")
+	}
+
+	// Parse the first line for meta info.
+	err := json.Unmarshal([]byte(jsonStrings[0]), &meta)
+	log.Println(meta)
+	if err != nil {
+		log.Println(err)
+		return emptyByte, errors.New("Invalid meta")
+	}
+	if meta.UUID == "" {
+		return emptyByte, errors.New("empty UUID")
+	}
+	uuid = meta.UUID
+	version = meta.TracerouteCallerVersion
+	resultFromCache = meta.CachedResult
+
+	err = json.Unmarshal([]byte(jsonStrings[1]), &cycleStart)
+	if err != nil {
+		return emptyByte, errors.New("Invalid cycle-start")
+	}
+
+	// Parse the line in struct
+	err = json.Unmarshal([]byte(jsonStrings[2]), &tracelb)
+	if err != nil {
+		// Some early stage scamper output has JSON grammar errors that can be fixed by
+		// extra reprocessing using jsonnett
+		// TODO: this is a hack. We should see if this can be simplified.
+		vm := jsonnet.MakeVM()
+		output, err := vm.EvaluateSnippet("file", jsonStrings[2])
+		err = json.Unmarshal([]byte(output), &tracelb)
+		if err != nil {
+			// fail and return here.
+			return emptyByte, errors.New("Invalid tracelb")
+		}
+	}
+	for i, _ := range tracelb.Nodes {
+		oneNode := &tracelb.Nodes[i]
+		var links []schema.HopLink
+		if len(oneNode.Links) == 0 {
+			hops = append(hops, schema.ScamperHop{
+				Source: schema.HopIP{IP: oneNode.Addr, Hostname: oneNode.Name},
+				Linkc:  oneNode.Linkc,
+			})
+			continue
+		}
+		if len(oneNode.Links) != 1 {
+			continue
+		}
+		// Links is an array containing a single array of HopProbes.
+		for _, oneLink := range oneNode.Links[0] {
+			var probes []schema.HopProbe
+			var ttl int64
+			for _, oneProbe := range oneLink.Probes {
+				var rtt []float64
+				for _, oneReply := range oneProbe.Replies {
+					rtt = append(rtt, oneReply.Rtt)
+				}
+				probes = append(probes, schema.HopProbe{Flowid: int64(oneProbe.Flowid), Rtt: rtt})
+				ttl = int64(oneProbe.Ttl)
+			}
+			links = append(links, schema.HopLink{HopDstIP: oneLink.Addr, TTL: ttl, Probes: probes})
+		}
+		// Extract Hop Geolocation for hop IP
+		if ann[oneNode.Addr] != nil {
+			hopAnn := ann[oneNode.Addr]
+			hops = append(hops, schema.ScamperHop{
+				Source: schema.HopIP{IP: oneNode.Addr,
+					City:        hopAnn.Geo.City,
+					CountryCode: hopAnn.Geo.CountryCode,
+					ASN:         hopAnn.Network.ASNumber,
+					Hostname:    oneNode.Name},
+				Linkc: oneNode.Linkc,
+				Links: links,
+			})
+		}
+		hops = append(hops, schema.ScamperHop{
+			Source: schema.HopIP{IP: oneNode.Addr, Hostname: oneNode.Name},
+			Linkc:  oneNode.Linkc,
+			Links:  links,
+		})
+
+	}
+
+	err = json.Unmarshal([]byte(jsonStrings[3]), &cycleStop)
+	if err != nil {
+		return emptyByte, errors.New("Invalid cycle-stop")
+	}
+
+	srcAnn := ann[tracelb.Src]
+	srcGeo := api.GeolocationIP{
+		ContinentCode:    srcAnn.Geo.ContinentCode,
+		CountryCode:      srcAnn.Geo.CountryCode,
+		CountryCode3:     srcAnn.Geo.CountryCode3,
+		CountryName:      srcAnn.Geo.CountryName,
+		Region:           srcAnn.Geo.Region,
+		MetroCode:        srcAnn.Geo.MetroCode,
+		City:             srcAnn.Geo.City,
+		AreaCode:         srcAnn.Geo.AreaCode,
+		PostalCode:       srcAnn.Geo.PostalCode,
+		Latitude:         srcAnn.Geo.Latitude,
+		Longitude:        srcAnn.Geo.Longitude,
+		AccuracyRadiusKm: srcAnn.Geo.AccuracyRadiusKm,
+	}
+	srcNetwork := api.ASData{
+		Systems: []api.System{api.System{ASNs: []uint32{srcAnn.Network.ASNumber}}},
+	}
+	source := schema.ServerInfo{
+		IP:      tracelb.Src,
+		Geo:     srcGeo,
+		Network: srcNetwork,
+	}
+	output := schema.PTTest{
+		UUID:           uuid,
+		StartTime:      int64(cycleStart.Start_time),
+		StopTime:       int64(cycleStop.Stop_time),
+		ScamperVersion: tracelb.Version,
+		Source:         source,
+		Destination:    schema.ClientInfo{IP: tracelb.Dst},
+		ProbeSize:      int64(tracelb.Probe_size),
+		ProbeC:         int64(tracelb.Probec),
+		Hop:            hops,
+		ExpVersion:     version,
+		CachedResult:   resultFromCache,
+	}
+	outputString, err := json.Marshal(output)
+	if err == nil {
+		return []byte(outputString), nil
+	}
+	return emptyByte, errors.New("Cannot marshal into json")
 }
 
 func ExtractIP(rawContent []byte) []string {
