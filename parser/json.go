@@ -133,10 +133,9 @@ func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
 	var cycleStop CyclestopLine
 
 	jsonStrings := strings.Split(string(data[:]), "\n")
-	emptyByte := make([]byte, 0)
 	if len(jsonStrings) != 5 {
 		log.Println("Invalid test")
-		return emptyByte, errors.New("Invalid test")
+		return []byte{}, errors.New("Invalid test")
 	}
 
 	// Parse the first line for meta info.
@@ -144,10 +143,10 @@ func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
 	log.Println(meta)
 	if err != nil {
 		log.Println(err)
-		return emptyByte, errors.New("Invalid meta")
+		return []byte{}, errors.New("Invalid meta")
 	}
 	if meta.UUID == "" {
-		return emptyByte, errors.New("empty UUID")
+		return []byte{}, errors.New("empty UUID")
 	}
 	uuid = meta.UUID
 	version = meta.TracerouteCallerVersion
@@ -155,7 +154,7 @@ func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
 
 	err = json.Unmarshal([]byte(jsonStrings[1]), &cycleStart)
 	if err != nil {
-		return emptyByte, errors.New("Invalid cycle-start")
+		return []byte{}, errors.New("Invalid cycle-start")
 	}
 
 	// Parse the line in struct
@@ -169,7 +168,7 @@ func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
 		err = json.Unmarshal([]byte(output), &tracelb)
 		if err != nil {
 			// fail and return here.
-			return emptyByte, errors.New("Invalid tracelb")
+			return []byte{}, errors.New("Invalid tracelb")
 		}
 	}
 	for i, _ := range tracelb.Nodes {
@@ -222,7 +221,7 @@ func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
 
 	err = json.Unmarshal([]byte(jsonStrings[3]), &cycleStop)
 	if err != nil {
-		return emptyByte, errors.New("Invalid cycle-stop")
+		return []byte{}, errors.New("Invalid cycle-stop")
 	}
 
 	srcGeo := GetGeoAnnotation(ann[tracelb.Src])
@@ -260,7 +259,7 @@ func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
 	if err == nil {
 		return []byte(outputString), nil
 	}
-	return emptyByte, errors.New("Cannot marshal into json")
+	return []byte{}, errors.New("Cannot marshal into json")
 }
 
 func ExtractIP(rawContent []byte) []string {

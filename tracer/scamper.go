@@ -4,6 +4,7 @@ package tracer
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +16,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/m-lab/etl/schema"
 	"github.com/m-lab/go/rtx"
 	"github.com/m-lab/traceroute-caller/connection"
 	"github.com/m-lab/traceroute-caller/parser"
@@ -37,11 +39,41 @@ func (*Scamper) generateFilename(cookie string, t time.Time) string {
 	return t.Format("20060102T150405Z") + "_" + uuid.FromCookie(uint64(c)) + ".jsonl"
 }
 
+// New version that create test from cached trace
+func (s *Scamper) TraceFromCachedTrace(conn connection.Connection, t time.Time, cachedTest string) error {
+	dir, err := createTimePath(s.OutputPath, t)
+	if err != nil {
+		log.Println("Could not create directories")
+		tracerCacheErrors.WithLabelValues("scamper", "baddir").Inc()
+		return err
+	}
+	filename := dir + s.generateFilename(conn.Cookie, t)
+	log.Println("Starting a cached trace to be put in", filename)
+
+	// remove the first line of cachedTest
+	var cachedTestJson schema.PTTest
+	err = json.Unmarshal([]byte(cachedTest), &cachedTestJson)
+
+	if err != nil {
+		log.Println("Invalid cached test")
+		tracerCacheErrors.WithLabelValues("scamper", "badcache").Inc()
+		return errors.New("Invalid cached test")
+	}
+
+	cachedTestJson.CachedResult = true
+	cachedTestJson.UUID, err = conn.UUID()
+	newTest, err := json.Marshal(cachedTestJson)
+	if err == nil {
+		return ioutil.WriteFile(filename, []byte(newTest), 0666)
+	}
+	return err
+}
+
 // TraceFromCachedTrace creates a file containing traceroute results that came from a
 // cache result, rather than performing the traceroute with scamper. Because
 // scamper-in-standalone and scamper-as-daemon use the same output format, this
 // function is the same code for both.
-func (s *Scamper) TraceFromCachedTrace(conn connection.Connection, t time.Time, cachedTest string) error {
+func (s *Scamper) TraceFromCachedTraceLegacy(conn connection.Connection, t time.Time, cachedTest string) error {
 	dir, err := createTimePath(s.OutputPath, t)
 	if err != nil {
 		log.Println("Could not create directories")
