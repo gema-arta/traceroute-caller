@@ -36,7 +36,7 @@ type Scamper struct {
 func (*Scamper) generateFilename(cookie string, t time.Time) string {
 	c, err := strconv.ParseInt(cookie, 16, 64)
 	rtx.PanicOnError(err, "Could not turn cookie into number")
-	return t.Format("20060102T150405Z") + "_" + uuid.FromCookie(uint64(c)) + ".jsonl"
+	return t.Format("20060102T150405Z") + "_" + uuid.FromCookie(uint64(c)) + ".json"
 }
 
 // New version that create test from cached trace
