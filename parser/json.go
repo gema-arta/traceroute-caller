@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/google/go-jsonnet"
-	"github.com/m-lab/annotation-serivce/api"
+	"github.com/m-lab/annotation-service/api"
 	"github.com/m-lab/etl/schema"
 	"github.com/m-lab/uuid-annotator/annotator"
 )
@@ -103,6 +103,23 @@ type CyclestopLine struct {
 	ID        float64 `json:"id"`
 	Hostname  string  `json:"hostname"`
 	Stop_time float64 `json:"stop_time"`
+}
+
+func GetGeoAnnotation(ann *annotator.ClientAnnotations) api.GeolocationIP {
+	return api.GeolocationIP{
+		ContinentCode:    ann.Geo.ContinentCode,
+		CountryCode:      ann.Geo.CountryCode,
+		CountryCode3:     ann.Geo.CountryCode3,
+		CountryName:      ann.Geo.CountryName,
+		Region:           ann.Geo.Region,
+		MetroCode:        ann.Geo.MetroCode,
+		City:             ann.Geo.City,
+		AreaCode:         ann.Geo.AreaCode,
+		PostalCode:       ann.Geo.PostalCode,
+		Latitude:         ann.Geo.Latitude,
+		Longitude:        ann.Geo.Longitude,
+		AccuracyRadiusKm: ann.Geo.AccuracyRadiusKm,
+	}
 }
 
 func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
@@ -208,28 +225,23 @@ func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
 		return emptyByte, errors.New("Invalid cycle-stop")
 	}
 
-	srcAnn := ann[tracelb.Src]
-	srcGeo := api.GeolocationIP{
-		ContinentCode:    srcAnn.Geo.ContinentCode,
-		CountryCode:      srcAnn.Geo.CountryCode,
-		CountryCode3:     srcAnn.Geo.CountryCode3,
-		CountryName:      srcAnn.Geo.CountryName,
-		Region:           srcAnn.Geo.Region,
-		MetroCode:        srcAnn.Geo.MetroCode,
-		City:             srcAnn.Geo.City,
-		AreaCode:         srcAnn.Geo.AreaCode,
-		PostalCode:       srcAnn.Geo.PostalCode,
-		Latitude:         srcAnn.Geo.Latitude,
-		Longitude:        srcAnn.Geo.Longitude,
-		AccuracyRadiusKm: srcAnn.Geo.AccuracyRadiusKm,
-	}
+	srcGeo := GetGeoAnnotation(ann[tracelb.Src])
 	srcNetwork := api.ASData{
-		Systems: []api.System{api.System{ASNs: []uint32{srcAnn.Network.ASNumber}}},
+		Systems: []api.System{api.System{ASNs: []uint32{ann[tracelb.Src].Network.ASNumber}}},
 	}
 	source := schema.ServerInfo{
 		IP:      tracelb.Src,
-		Geo:     srcGeo,
-		Network: srcNetwork,
+		Geo:     &srcGeo,
+		Network: &srcNetwork,
+	}
+	destGeo := GetGeoAnnotation(ann[tracelb.Dst])
+	destNetwork := api.ASData{
+		Systems: []api.System{api.System{ASNs: []uint32{ann[tracelb.Dst].Network.ASNumber}}},
+	}
+	dest := schema.ClientInfo{
+		IP:      tracelb.Dst,
+		Geo:     &destGeo,
+		Network: &destNetwork,
 	}
 	output := schema.PTTest{
 		UUID:           uuid,
@@ -237,7 +249,7 @@ func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
 		StopTime:       int64(cycleStop.Stop_time),
 		ScamperVersion: tracelb.Version,
 		Source:         source,
-		Destination:    schema.ClientInfo{IP: tracelb.Dst},
+		Destination:    dest,
 		ProbeSize:      int64(tracelb.Probe_size),
 		ProbeC:         int64(tracelb.Probec),
 		Hop:            hops,
