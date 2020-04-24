@@ -19,7 +19,6 @@ import (
 	"github.com/m-lab/traceroute-caller/connection"
 	"github.com/m-lab/traceroute-caller/parser"
 	"github.com/m-lab/uuid"
-	"github.com/m-lab/uuid-annotator/annotator"
 	"github.com/m-lab/uuid-annotator/ipservice"
 	pipe "gopkg.in/m-lab/pipe.v3"
 )
@@ -89,11 +88,6 @@ func (s *Scamper) Trace(conn connection.Connection, t time.Time) (out string, er
 	return s.trace(conn, t)
 }
 
-func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
-	data []byte) []byte {
-	return make([]byte, 0)
-}
-
 // trace a single connection using scamper as a standalone binary.
 func (s *Scamper) trace(conn connection.Connection, t time.Time) (string, error) {
 	dir, err := createTimePath(s.OutputPath, t)
@@ -124,9 +118,11 @@ func (s *Scamper) trace(conn connection.Connection, t time.Time) (string, error)
 	ann, err := client.Annotate(context.Background(), iplist)
 	if err == nil {
 		// add annotation to the final output
-		AnnotatedBuff := InsertAnnotation(ann, buff.Bytes())
-		rtx.PanicOnError(ioutil.WriteFile(filename, AnnotatedBuff, 0666), "Could not save output to file")
-		return string(AnnotatedBuff), nil
+		AnnotatedBuff, err := parser.InsertAnnotation(ann, buff.Bytes())
+		if err == nil {
+			rtx.PanicOnError(ioutil.WriteFile(filename, AnnotatedBuff, 0666), "Could not save output to file")
+			return string(AnnotatedBuff), nil
+		}
 	}
 
 	rtx.PanicOnError(ioutil.WriteFile(filename, buff.Bytes(), 0666), "Could not save output to file")
@@ -250,9 +246,11 @@ func (d *ScamperDaemon) trace(conn connection.Connection, t time.Time) (string, 
 	log.Println(ann)
 	if err == nil {
 		// add annotation to the final output
-		AnnotatedBuff := InsertAnnotation(ann, buff.Bytes())
-		rtx.PanicOnError(ioutil.WriteFile(filename, AnnotatedBuff, 0666), "Could not save output to file")
-		return string(AnnotatedBuff), nil
+		AnnotatedBuff, err := parser.InsertAnnotation(ann, buff.Bytes())
+		if err == nil {
+			rtx.PanicOnError(ioutil.WriteFile(filename, AnnotatedBuff, 0666), "Could not save output to file")
+			return string(AnnotatedBuff), nil
+		}
 	}
 
 	rtx.PanicOnError(err, "Command %v failed", cmd)
