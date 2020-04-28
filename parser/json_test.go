@@ -1,10 +1,26 @@
 package parser_test
 
 import (
+	"log"
 	"testing"
 
 	"github.com/m-lab/traceroute-caller/parser"
+	"github.com/m-lab/uuid-annotator/annotator"
 )
+
+func TestInsertAnnotation(t *testing.T) {
+	var fakeAnn map[string]*annotator.ClientAnnotations
+	testStr := `{"UUID": "ndt-plh7v_1566050090_000000000004D64D"}
+	{"type":"cycle-start", "list_name":"/tmp/scamperctrl:51811", "id":1, "hostname":"ndt-plh7v", "start_time":1566691298}
+	{"type":"tracelb", "version":"0.1", "userid":0, "method":"icmp-echo", "src":"::ffff:180.87.97.101", "dst":"::ffff:1.47.236.62", "start":{"sec":1566691298, "usec":476221, "ftime":"2019-08-25 00:01:38"}, "probe_size":60, "firsthop":1, "attempts":3, "confidence":95, "tos":0, "gaplimit":3, "wait_timeout":5, "wait_probe":250, "probec":0, "probec_max":3000, "nodec":0, "linkc":0}
+	{"type":"cycle-stop", "list_name":"/tmp/scamperctrl:51811", "id":1, "hostname":"ndt-plh7v", "stop_time":1566691298}
+	`
+	_, err := parser.InsertAnnotation(fakeAnn, []byte(testStr))
+	if err != nil {
+		log.Println(err)
+		t.Error("Cannot insert annotation")
+	}
+}
 
 func TestExtractIP(t *testing.T) {
 	testStr := `{"UUID": "ndt-plh7v_1566050090_000000000004D64D"}

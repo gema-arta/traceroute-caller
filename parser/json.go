@@ -106,6 +106,9 @@ type CyclestopLine struct {
 }
 
 func GetGeoAnnotation(ann *annotator.ClientAnnotations) api.GeolocationIP {
+	if ann == nil {
+		return api.GeolocationIP{}
+	}
 	return api.GeolocationIP{
 		ContinentCode:    ann.Geo.ContinentCode,
 		CountryCode:      ann.Geo.CountryCode,
@@ -224,23 +227,42 @@ func InsertAnnotation(ann map[string]*annotator.ClientAnnotations,
 		return []byte{}, errors.New("Invalid cycle-stop")
 	}
 
-	srcGeo := GetGeoAnnotation(ann[tracelb.Src])
-	srcNetwork := api.ASData{
-		Systems: []api.System{api.System{ASNs: []uint32{ann[tracelb.Src].Network.ASNumber}}},
+	var source schema.ServerInfo
+	if ann[tracelb.Src] == nil {
+		source = schema.ServerInfo{
+			IP:      tracelb.Src,
+			Geo:     nil,
+			Network: nil,
+		}
+	} else {
+		srcGeo := GetGeoAnnotation(ann[tracelb.Src])
+		srcNetwork := api.ASData{
+			Systems: []api.System{api.System{ASNs: []uint32{ann[tracelb.Src].Network.ASNumber}}},
+		}
+		source = schema.ServerInfo{
+			IP:      tracelb.Src,
+			Geo:     &srcGeo,
+			Network: &srcNetwork,
+		}
 	}
-	source := schema.ServerInfo{
-		IP:      tracelb.Src,
-		Geo:     &srcGeo,
-		Network: &srcNetwork,
-	}
-	destGeo := GetGeoAnnotation(ann[tracelb.Dst])
-	destNetwork := api.ASData{
-		Systems: []api.System{api.System{ASNs: []uint32{ann[tracelb.Dst].Network.ASNumber}}},
-	}
-	dest := schema.ClientInfo{
-		IP:      tracelb.Dst,
-		Geo:     &destGeo,
-		Network: &destNetwork,
+
+	var dest schema.ClientInfo
+	if ann[tracelb.Dst] == nil {
+		dest = schema.ClientInfo{
+			IP:      tracelb.Dst,
+			Geo:     nil,
+			Network: nil,
+		}
+	} else {
+		destGeo := GetGeoAnnotation(ann[tracelb.Dst])
+		destNetwork := api.ASData{
+			Systems: []api.System{api.System{ASNs: []uint32{ann[tracelb.Dst].Network.ASNumber}}},
+		}
+		dest = schema.ClientInfo{
+			IP:      tracelb.Dst,
+			Geo:     &destGeo,
+			Network: &destNetwork,
+		}
 	}
 	output := schema.PTTest{
 		UUID:           uuid,
